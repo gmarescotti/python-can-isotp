@@ -54,6 +54,7 @@ class PDU:
 		ContinueToSend = 0
 		Wait = 1
 		Overflow = 2
+		CrcError = 3 # GGG
 
 	def __init__(self, msg = None, start_of_data=0):
 		
@@ -133,8 +134,14 @@ class PDU:
 				raise ValueError('Flow Control frame must be at least %d bytes with the actual configuration' % (3+start_of_data))
 
 			self.flow_status = int(msg_data[0]) & 0xF
-			if self.flow_status >= 3:
+			# if self.flow_status >= 3:
+			if self.flow_status >= 4: # GGG
 				raise ValueError('Unknown flow status')
+            # GGG+
+			if self.flow_status == PDU.FlowStatus.Wait:
+				time.sleep(0.1)
+				self.flow_status = PDU.FlowStatus.ContinueToSend # Nono gestito come da protocollo...
+            # GGG-
 
 			self.blocksize = int(msg_data[1])
 			stmin_temp = int(msg_data[2])
@@ -524,14 +531,23 @@ class TransportLayer:
 		self.last_flow_control_frame = None
 
 		if flow_control_frame is not None:
+			# print("GGGGGGGGGGGGGGGGGGGG")
 			if flow_control_frame.flow_status == PDU.FlowStatus.Overflow: 	# Needs to stop sending. 
 				self.stop_sending()
 				return
 
+            # GGG+
+			if flow_control_frame.flow_status == PDU.FlowStatus.CrcError:
+				self.trigger_error(isotp.errors.UnexpectedFlowControlError(self))
+				self.stop_sending()
+				return None
+            # GGG-
+                
 			if self.tx_state == self.TxState.IDLE:
 				self.trigger_error(isotp.errors.UnexpectedFlowControlError('Received a FlowControl message while transmission was Idle. Ignoring'))
 			else:
 				if flow_control_frame.flow_status == PDU.FlowStatus.Wait:
+					assert False, "GGG"
 					if self.params.wftmax == 0:
 						self.trigger_error(isotp.errors.UnsuportedWaitFrameError('Received a FlowControl requesting to wait, but fwtmax is set to 0'))
 					elif self.wft_counter >= self.params.wftmax:
@@ -557,6 +573,12 @@ class TransportLayer:
 
 					self.tx_state = self.TxState.TRANSMIT_CF
 
+					#"""
+					if (len(self.tx_buffer) == 0):  # GGG+
+						self.stop_sending() # GGG+
+						# print("UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU")
+					#"""
+
 		# ======= Timeouts ======
 		if self.timer_rx_fc.is_timed_out():
 			self.trigger_error(isotp.errors.FlowControlTimeoutError('Reception of FlowControl timed out. Stopping transmission'))
@@ -566,8 +588,9 @@ class TransportLayer:
 		# ======= FSM ======
 		
 		# Check this first as we may have another isotp frame to send and we need to handle it right away without waiting for next "process()" call
-		if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
-			self.stop_sending()	
+		# GGG rimuovere per abilitare CF during IDLE...
+		#if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
+		#	self.stop_sending()
 		
 
 		if self.tx_state == self.TxState.IDLE:
@@ -625,7 +648,12 @@ class TransportLayer:
 				self.timer_tx_stmin.start()
 				self.tx_block_counter+=1
 			if (len(self.tx_buffer) == 0):
-				self.stop_sending()
+				# self.stop_sending() # GGG-
+				# alla fine del ciclo isotp aspetto un ultimo Controllo di Flusso GGG+
+				# print("AAAAAAAAAAAA")
+				# time.sleep(0.1)
+				self.tx_state 	= self.TxState.WAIT_FC # GGG+
+				self.start_rx_fc_timer() # GGG+
 
 			elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
 				self.tx_state = self.TxState.WAIT_FC
