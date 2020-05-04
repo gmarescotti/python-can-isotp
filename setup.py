@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 setup(
   name = 'can-isotp',
   packages = find_packages(exclude=['test']),
-  version = '1.5',
+  version = '1.5.1',
   description = 'Module enabling the IsoTP protocol defined by ISO-15765',
   long_description=long_description,
   author = 'Pier-Yves Lessard',

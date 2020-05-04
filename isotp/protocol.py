@@ -139,8 +139,8 @@ class PDU:
 				raise ValueError('Unknown flow status')
             # GGG+
 			if self.flow_status == PDU.FlowStatus.Wait:
-				time.sleep(0.1)
-				self.flow_status = PDU.FlowStatus.ContinueToSend # Nono gestito come da protocollo...
+				############## ??????????? time.sleep(0.1)
+				self.flow_status = PDU.FlowStatus.ContinueToSend  # Nono gestito come da protocollo...
             # GGG-
 
 			self.blocksize = int(msg_data[1])
@@ -362,7 +362,7 @@ class TransportLayer:
 
 		self.error_handler = error_handler
 		self.actual_rxdl   = None	
-
+	
 
 	
 	def send(self, data, target_address_type=isotp.address.TargetAddressType.Physical):
@@ -482,7 +482,7 @@ class TransportLayer:
 				self.start_reception_after_first_frame_if_valid(pdu)
 			elif pdu.type == PDU.Type.CONSECUTIVE_FRAME:
 				self.trigger_error(isotp.errors.UnexpectedConsecutiveFrameError('Received a ConsecutiveFrame while reception was idle. Ignoring'))
-				
+
 
 		elif self.rx_state == self.RxState.WAIT_CF:
 			if pdu.type == PDU.Type.SINGLE_FRAME:
@@ -591,7 +591,7 @@ class TransportLayer:
 		# GGG rimuovere per abilitare CF during IDLE...
 		#if self.tx_state != self.TxState.IDLE and len(self.tx_buffer) == 0:
 		#	self.stop_sending()
-		
+
 
 		if self.tx_state == self.TxState.IDLE:
 			read_tx_queue = True	# Read until we get non-empty frame to send
@@ -648,12 +648,16 @@ class TransportLayer:
 				self.timer_tx_stmin.start()
 				self.tx_block_counter+=1
 			if (len(self.tx_buffer) == 0):
-				# self.stop_sending() # GGG-
+				self.stop_sending()  # GGG-
+				"""
 				# alla fine del ciclo isotp aspetto un ultimo Controllo di Flusso GGG+
-				# print("AAAAAAAAAAAA")
+				self.logger.info("AAAAAAAAAAAA")
+				self.logger.fatal(traceback.format_stack())
 				# time.sleep(0.1)
+				#if self.timer_rx_fc.is_stopped():
 				self.tx_state 	= self.TxState.WAIT_FC # GGG+
 				self.start_rx_fc_timer() # GGG+
+				"""
 
 			elif self.remote_blocksize != 0 and self.tx_block_counter >= self.remote_blocksize:
 				self.tx_state = self.TxState.WAIT_FC
@@ -806,7 +810,7 @@ class TransportLayer:
 		self.start_rx_cf_timer()
 		self.last_seqnum = 0
 		self.rx_block_counter = 0
-			
+
 
 	def trigger_error(self, error):
 		if self.error_handler is not None:
